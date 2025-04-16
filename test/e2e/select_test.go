@@ -142,7 +142,7 @@ func startPostgresContainer(t *testing.T, ctx context.Context) (testcontainers.C
 		ContainerRequest: req,
 		Started:          true,
 	})
-	require.NoError(t, err, "Failed to start PostgreSQL container")
+	require.NoError(t, err, "Failed to start postgres container")
 
 	host, err := pgContainer.Host(ctx)
 	require.NoError(t, err)

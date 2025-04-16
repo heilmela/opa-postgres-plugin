@@ -13,14 +13,17 @@ import (
 	cfg "github.com/heilmela/opa-postgres-plugin/pkg/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-policy-agent/opa/v1/plugins"
-	"github.com/open-policy-agent/opa/v1/rego"
-	"github.com/open-policy-agent/opa/v1/types"
 )
 
 var PgxPoolConnect = pgxpool.New
 
 // redundant but nicer to consume for ppl importing the plugin
 var PluginName = cfg.PluginName
+
+var (
+	dbPool  *pgxpool.Pool
+	dbMutex sync.RWMutex
+)
 
 type PostgresPlugin struct {
 	manager *plugins.Manager
@@ -45,7 +48,7 @@ func (p *PostgresPlugin) Start(ctx context.Context) error {
 		"has_custom_options":    len(p.config.Options) > 0,
 	}).Debug("postgres plugin configuration")
 
-	logger.Debug("attempting to connect to PostgreSQL database...")
+	logger.Debug("attempting to connect to database...")
 
 	if p.config.ConnectionString == "" {
 		connectionString, err := cfg.BuildConnectionString(p.config)
@@ -91,18 +94,7 @@ func (p *PostgresPlugin) Start(ctx context.Context) error {
 	p.pool = pool
 	logger.Info("successfully connected to postgres")
 
-	selectFunction := internal.NewSelectFunction(p.pool)
-	rego.RegisterBuiltin2(
-		&rego.Function{
-			Name:             "postgres.select",
-			Decl:             types.NewFunction(types.Args(types.S, types.NewArray([]types.Type{}, types.A)), types.A),
-			Memoize:          true,
-			Nondeterministic: true,
-		},
-		selectFunction,
-	)
-	logger.Info("registered postgres.select builtin")
-
+	internal.UpdateDatabaseConnection(p.pool)
 	p.manager.UpdatePluginStatus(cfg.PluginName, &plugins.Status{State: plugins.StateOK})
 	return nil
 }
@@ -122,63 +114,5 @@ func (p *PostgresPlugin) Stop(ctx context.Context) {
 }
 
 func (p *PostgresPlugin) Reconfigure(ctx context.Context, config interface{}) {
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
-
-	logger := p.manager.Logger()
-	logger.Info("reconfiguring postgres plugin")
-
-	p.config = config.(cfg.Config)
-
-	if p.pool != nil {
-		logger.Info("closing existing postgres connection pool")
-		p.pool.Close()
-	}
-
-	if p.config.ConnectionString == "" {
-		connectionString, err := cfg.BuildConnectionString(p.config)
-		if err != nil {
-			statusErr := fmt.Sprintf("failed to build connection string: %v", err)
-			p.manager.UpdatePluginStatus(cfg.PluginName, &plugins.Status{
-				State:   plugins.StateNotReady,
-				Message: statusErr,
-			})
-			logger.WithFields(map[string]interface{}{
-				"err": err,
-			}).Error("failed to build connection string during reconfiguration")
-			return
-		}
-		p.config.ConnectionString = connectionString
-	}
-
-	pool, err := PgxPoolConnect(ctx, p.config.ConnectionString)
-	if err != nil {
-		statusErr := fmt.Sprintf("unable to create connection pool: %v", err)
-		p.manager.UpdatePluginStatus(cfg.PluginName, &plugins.Status{
-			State:   plugins.StateNotReady,
-			Message: statusErr,
-		})
-		logger.WithFields(map[string]interface{}{
-			"err": err,
-		}).Error("failed to create PostgreSQL connection pool during reconfiguration")
-		return
-	}
-
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		statusErr := fmt.Sprintf("connection pool created but ping failed: %v", err)
-		p.manager.UpdatePluginStatus(cfg.PluginName, &plugins.Status{
-			State:   plugins.StateNotReady,
-			Message: statusErr,
-		})
-		logger.WithFields(map[string]interface{}{
-			"err": err,
-		}).Error("postgres connection pool ping failed during reconfiguration")
-		return
-	}
-
-	p.pool = pool
-	logger.Info("successfully reconfigured postgres connection")
-
-	p.manager.UpdatePluginStatus(cfg.PluginName, &plugins.Status{State: plugins.StateOK})
+	return
 }
