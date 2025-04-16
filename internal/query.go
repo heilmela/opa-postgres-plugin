@@ -8,12 +8,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 )
 
-func NewSelectFunction(conn *pgx.Conn) rego.Builtin2 {
+func NewSelectFunction(conn *pgxpool.Pool) rego.Builtin2 {
 	return func(bctx rego.BuiltinContext, queryTerm *ast.Term, argsTerm *ast.Term) (*ast.Term, error) {
 		var query string
 		if err := ast.As(queryTerm.Value, &query); err != nil {

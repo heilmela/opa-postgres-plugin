@@ -5,7 +5,7 @@
 package config
 
 const (
-	PluginName = "opa-postgres-plugin"
+	PluginName = "postgres"
 
 	defaultHost     = "localhost"
 	defaultPort     = 5432

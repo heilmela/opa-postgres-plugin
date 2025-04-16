@@ -41,7 +41,7 @@ func New(m *plugins.Manager, bs []byte) (*Config, error) {
 	}
 
 	if cfg.ConnectionString == "" {
-		connectionString, err := buildConnectionString(cfg)
+		connectionString, err := BuildConnectionString(cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -51,7 +51,7 @@ func New(m *plugins.Manager, bs []byte) (*Config, error) {
 	return &cfg, nil
 }
 
-func buildConnectionString(cfg Config) (string, error) {
+func BuildConnectionString(cfg Config) (string, error) {
 	connStr := fmt.Sprintf("postgres://%s:%d/%s", cfg.Host, cfg.Port, cfg.Database)
 
 	params := url.Values{}
@@ -68,7 +68,7 @@ func buildConnectionString(cfg Config) (string, error) {
 	}
 
 	if cfg.ConnectTimeoutSeconds > 0 {
-		params.Add("connect_timeout_seconds", strconv.Itoa(cfg.ConnectTimeoutSeconds))
+		params.Add("connect_timeout", strconv.Itoa(cfg.ConnectTimeoutSeconds))
 	}
 
 	if cfg.ApplicationName != "" {
