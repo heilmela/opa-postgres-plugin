@@ -19,6 +19,9 @@ import (
 
 var PgxPoolConnect = pgxpool.New
 
+// redundant but nicer to consume for ppl importing the plugin
+var PluginName = cfg.PluginName
+
 type PostgresPlugin struct {
 	manager *plugins.Manager
 	mtx     sync.Mutex
