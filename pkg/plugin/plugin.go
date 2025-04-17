@@ -7,7 +7,6 @@ package plugin
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/heilmela/opa-postgres-plugin/internal"
 	cfg "github.com/heilmela/opa-postgres-plugin/pkg/config"
@@ -20,14 +19,8 @@ var PgxPoolConnect = pgxpool.New
 // redundant but nicer to consume for ppl importing the plugin
 var PluginName = cfg.PluginName
 
-var (
-	dbPool  *pgxpool.Pool
-	dbMutex sync.RWMutex
-)
-
 type PostgresPlugin struct {
 	manager *plugins.Manager
-	mtx     sync.Mutex
 	config  cfg.Config
 	pool    *pgxpool.Pool
 }

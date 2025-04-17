@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
+	"github.com/open-policy-agent/opa/v1/topdown/print"
 	"github.com/open-policy-agent/opa/v1/types"
 )
 
@@ -40,13 +41,20 @@ func init() {
 		},
 		func(bctx rego.BuiltinContext, queryTerm, argsTerm *ast.Term) (*ast.Term, error) {
 			conn := GetDatabaseConnection()
+			pctx := print.Context{
+				Context:  bctx.Context,
+				Location: bctx.Location,
+			}
+
 			if conn == nil {
-				return nil, fmt.Errorf("postgres.select: database connection not yet established")
+				err := bctx.PrintHook.Print(pctx, "postgres.select: database connection not yet established")
+				return nil, err
 			}
 
 			var query string
 			if err := ast.As(queryTerm.Value, &query); err != nil {
-				return nil, fmt.Errorf("postgres.select: invalid query: %w", err)
+				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: invalid query: %v", err))
+				return nil, err
 			}
 
 			var argsArray []interface{}
@@ -54,17 +62,20 @@ func init() {
 				for i := 0; i < arr.Len(); i++ {
 					var val interface{}
 					if err := ast.As(arr.Elem(i).Value, &val); err != nil {
-						return nil, fmt.Errorf("postgres.select: invalid argument at position %d: %w", i, err)
+						err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: invalid argument at position %d: %v", i, err))
+						return nil, err
 					}
 					argsArray = append(argsArray, val)
 				}
 			} else {
-				return nil, fmt.Errorf("postgres.select: second argument must be an array")
+				err := bctx.PrintHook.Print(pctx, "postgres.select: second argument must be an array")
+				return nil, err
 			}
 
 			rows, err := conn.Query(context.Background(), query, argsArray...)
 			if err != nil {
-				return nil, fmt.Errorf("postgres.select: query failed: %w", err)
+				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: query failed: %v", err))
+				return nil, err
 			}
 			defer rows.Close()
 
@@ -72,7 +83,8 @@ func init() {
 			for rows.Next() {
 				values, err := rows.Values()
 				if err != nil {
-					return nil, fmt.Errorf("postgres.select: failed to read row: %w", err)
+					err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: failed to read row: %v", err))
+					return nil, err
 				}
 
 				fieldDescriptions := rows.FieldDescriptions()
@@ -87,7 +99,8 @@ func init() {
 
 			resultValue, err := ast.InterfaceToValue(result)
 			if err != nil {
-				return nil, fmt.Errorf("postgres.select: failed to convert result: %w", err)
+				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: failed to convert result: %v", err))
+				return nil, err
 			}
 
 			return ast.NewTerm(resultValue), nil

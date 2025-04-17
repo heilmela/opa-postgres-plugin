@@ -5,8 +5,6 @@
 package plugin
 
 import (
-	"sync"
-
 	cfg "github.com/heilmela/opa-postgres-plugin/pkg/config"
 	"github.com/open-policy-agent/opa/v1/plugins"
 )
@@ -26,7 +24,6 @@ func (Factory) New(m *plugins.Manager, config interface{}) plugins.Plugin {
 
 	plugin := &PostgresPlugin{
 		manager: m,
-		mtx:     sync.Mutex{},
 		config:  *parsedConfig,
 	}
 
