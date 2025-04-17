@@ -34,7 +34,7 @@ func GetDatabaseConnection() *pgxpool.Pool {
 func init() {
 	rego.RegisterBuiltin2(
 		&rego.Function{
-			Name:             "postgres.select",
+			Name:             "postgres.query",
 			Decl:             types.NewFunction(types.Args(types.S, types.NewArray([]types.Type{}, types.A)), types.A),
 			Memoize:          true,
 			Nondeterministic: true,
@@ -47,13 +47,13 @@ func init() {
 			}
 
 			if conn == nil {
-				err := bctx.PrintHook.Print(pctx, "postgres.select: database connection not yet established")
+				err := bctx.PrintHook.Print(pctx, "postgres.query: database connection not yet established")
 				return nil, err
 			}
 
 			var query string
 			if err := ast.As(queryTerm.Value, &query); err != nil {
-				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: invalid query: %v", err))
+				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.query: invalid query: %v", err))
 				return nil, err
 			}
 
@@ -62,19 +62,19 @@ func init() {
 				for i := 0; i < arr.Len(); i++ {
 					var val interface{}
 					if err := ast.As(arr.Elem(i).Value, &val); err != nil {
-						err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: invalid argument at position %d: %v", i, err))
+						err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.query: invalid argument at position %d: %v", i, err))
 						return nil, err
 					}
 					argsArray = append(argsArray, val)
 				}
 			} else {
-				err := bctx.PrintHook.Print(pctx, "postgres.select: second argument must be an array")
+				err := bctx.PrintHook.Print(pctx, "postgres.query: second argument must be an array")
 				return nil, err
 			}
 
 			rows, err := conn.Query(context.Background(), query, argsArray...)
 			if err != nil {
-				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: query failed: %v", err))
+				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.query: query failed: %v", err))
 				return nil, err
 			}
 			defer rows.Close()
@@ -83,7 +83,7 @@ func init() {
 			for rows.Next() {
 				values, err := rows.Values()
 				if err != nil {
-					err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: failed to read row: %v", err))
+					err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.query: failed to read row: %v", err))
 					return nil, err
 				}
 
@@ -99,7 +99,7 @@ func init() {
 
 			resultValue, err := ast.InterfaceToValue(result)
 			if err != nil {
-				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.select: failed to convert result: %v", err))
+				err = bctx.PrintHook.Print(pctx, fmt.Sprintf("postgres.query: failed to convert result: %v", err))
 				return nil, err
 			}
 

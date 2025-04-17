@@ -73,7 +73,7 @@ plugins:
 
 ### In Rego Policies
 
-Once configured, you can use the `postgres.select` function in your Rego policies:
+Once configured, you can use the `postgres.query` function in your Rego policies:
 
 ```rego
 package example
@@ -86,7 +86,7 @@ default allow := false
 allow if {
   # Get user&#x27;s roles from database
   user_id := input.user.id
-  roles := postgres.select(SELECT role FROM user_roles WHERE user_id = $1, [user_id])
+  roles := postgres.query(SELECT role FROM user_roles WHERE user_id = $1, [user_id])
 
   # Check if user has admin role
   some i
@@ -96,7 +96,7 @@ allow if {
 
 ## API Reference
 
-### `postgres.select(query, args)`
+### `postgres.query(query, args)`
 
 Executes a SQL query against the configured PostgreSQL database.
 
