@@ -14,13 +14,18 @@ The `opa-postgres-plugin` allows you to execute PostgreSQL queries directly from
 
 ## Installation
 
+### As a CLI tool
+
+```bash
+go install github.com/heilmela/opa-postgres-plugin@latest
+```
 ### As a Library
 
 ```bash
 go get github.com/heilmela/opa-postgres-plugin
 ```
 
-See `/cmd` or the [OPA Documentation](https://www.openpolicyagent.org/docs/latest/extensions/#custom-built-in-function-in-go) on how to add plugins to opa.
+See `main.go` or the [OPA Documentation](https://www.openpolicyagent.org/docs/latest/extensions/#custom-built-in-function-in-go) on how to add plugins to opa.
 
 ## Usage
 
