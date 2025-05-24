@@ -5,87 +5,94 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
-	"strconv"
 
 	"github.com/open-policy-agent/opa/v1/plugins"
-	"github.com/open-policy-agent/opa/v1/util"
 )
 
 type Config struct {
-	ConnectionString string `json:"connection_string,omitempty"`
-
-	Host     string `json:"host,omitempty"`
-	Port     int    `json:"port,omitempty"`
-	Database string `json:"database,omitempty"`
-	User     string `json:"user,omitempty"`
-	Password string `json:"password,omitempty"`
-	SSLMode  string `json:"ssl_mode,omitempty"`
-
-	ConnectTimeoutSeconds int               `json:"connect_timeout_seconds,omitempty"`
-	ApplicationName       string            `json:"application_name,omitempty"`
-	SearchPath            string            `json:"search_path,omitempty"`
-	Options               map[string]string `json:"options,omitempty"`
+	ConnectionString string            `json:"connection_string,omitempty"`
+	ConnectionParams map[string]string `json:"-"`
 }
 
 func New(m *plugins.Manager, bs []byte) (*Config, error) {
 	cfg := Config{
-		Host:     defaultHost,
-		Port:     defaultPort,
-		Database: defaultDatabase,
+		ConnectionParams: make(map[string]string),
 	}
 
-	if err := util.Unmarshal(bs, &cfg); err != nil {
-		return nil, err
+	var rawConfig map[string]interface{}
+	if err := json.Unmarshal(bs, &rawConfig); err != nil {
+		return nil, fmt.Errorf("error unmarshalling configuration: %w", err)
+	}
+
+	for key, value := range rawConfig {
+		if key == "connection_string" {
+			if strVal, ok := value.(string); ok {
+				cfg.ConnectionString = strVal
+			} else if value != nil {
+				return nil, fmt.Errorf("configuration key 'connection_string' must be a string, got %T", value)
+			}
+		} else if key == "connection_params" {
+			if paramsMap, ok := value.(map[string]interface{}); ok {
+				for paramName, paramValue := range paramsMap {
+					var strVal string
+					switch v := paramValue.(type) {
+					case string:
+						strVal = v
+					case float64:
+						if v == float64(int64(v)) {
+							strVal = fmt.Sprintf("%d", int64(v))
+						} else {
+							strVal = fmt.Sprintf("%g", v)
+						}
+					case bool:
+						strVal = fmt.Sprintf("%t", v)
+					case nil:
+						continue
+					default:
+						return nil, fmt.Errorf("unsupported value type for connection_params key '%s': %T. Value must be a string, number, boolean, or null", paramName, paramValue)
+					}
+					cfg.ConnectionParams[paramName] = strVal
+				}
+			} else if value != nil {
+				return nil, fmt.Errorf("configuration key 'connection_params' must be an object, got %T", value)
+			}
+		}
 	}
 
 	if cfg.ConnectionString == "" {
-		connectionString, err := BuildConnectionString(cfg)
-		if err != nil {
-			return nil, err
+		if len(cfg.ConnectionParams) > 0 {
+			connectionString, err := BuildConnectionString(cfg.ConnectionParams)
+			if err != nil {
+				return nil, fmt.Errorf("error building connection string from options: %w", err)
+			}
+			cfg.ConnectionString = connectionString
+		} else {
+
+			return nil, fmt.Errorf("no 'connection_string' provided and no parameters found in 'connection_params' to build one")
 		}
-		cfg.ConnectionString = connectionString
 	}
 
 	return &cfg, nil
 }
 
-func BuildConnectionString(cfg Config) (string, error) {
-	connStr := fmt.Sprintf("postgres://%s:%d/%s", cfg.Host, cfg.Port, cfg.Database)
+func BuildConnectionString(options map[string]string) (string, error) {
+	if len(options) == 0 {
+		return "postgresql:///", nil
+	}
+
+	u := &url.URL{
+		Scheme: "postgresql",
+		Path:   "/",
+	}
 
 	params := url.Values{}
-
-	if cfg.User != "" {
-		params.Add("user", cfg.User)
-	}
-	if cfg.Password != "" {
-		params.Add("password", cfg.Password)
-	}
-
-	if cfg.SSLMode != "" {
-		params.Add("sslmode", cfg.SSLMode)
-	}
-
-	if cfg.ConnectTimeoutSeconds > 0 {
-		params.Add("connect_timeout", strconv.Itoa(cfg.ConnectTimeoutSeconds))
-	}
-
-	if cfg.ApplicationName != "" {
-		params.Add("application_name", cfg.ApplicationName)
-	}
-
-	if cfg.SearchPath != "" {
-		params.Add("search_path", cfg.SearchPath)
-	}
-
-	for k, v := range cfg.Options {
+	for k, v := range options {
 		params.Add(k, v)
 	}
+	u.RawQuery = params.Encode()
 
-	if len(params) > 0 {
-		connStr = connStr + "?" + params.Encode()
-	}
-
-	return connStr, nil
+	return u.String(), nil
 }

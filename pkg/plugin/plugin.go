@@ -15,8 +15,6 @@ import (
 )
 
 var PgxPoolConnect = pgxpool.New
-
-// redundant but nicer to consume for ppl importing the plugin
 var PluginName = cfg.PluginName
 
 type PostgresPlugin struct {
@@ -27,24 +25,17 @@ type PostgresPlugin struct {
 
 func (p *PostgresPlugin) Start(ctx context.Context) error {
 	logger := p.manager.Logger()
-	logger.WithFields(map[string]interface{}{
-		"host":                  p.config.Host,
-		"port":                  p.config.Port,
-		"password":              p.config.Password,
-		"database":              p.config.Database,
-		"user":                  p.config.User,
-		"ssl_mode":              p.config.SSLMode,
-		"connect_timeout":       p.config.ConnectTimeoutSeconds,
-		"application_name":      p.config.ApplicationName,
-		"search_path":           p.config.SearchPath,
-		"has_connection_string": p.config.ConnectionString != "",
-		"has_custom_options":    len(p.config.Options) > 0,
-	}).Debug("postgres plugin configuration")
+
+	configLogFields := map[string]interface{}{
+		"connection_string": p.config.ConnectionString,
+		"connection_params": p.config.ConnectionParams,
+	}
+	logger.WithFields(configLogFields).Debug("postgres plugin configuration")
 
 	logger.Debug("attempting to connect to database...")
 
 	if p.config.ConnectionString == "" {
-		connectionString, err := cfg.BuildConnectionString(p.config)
+		connectionString, err := cfg.BuildConnectionString(p.config.ConnectionParams)
 		if err != nil {
 			p.manager.UpdatePluginStatus(cfg.PluginName, &plugins.Status{
 				State:   plugins.StateNotReady,

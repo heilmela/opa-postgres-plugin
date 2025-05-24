@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/go-connections/nat"
 	"github.com/jackc/pgx/v5"
+	"github.com/open-policy-agent/opa/v1/plugins"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/runtime"
 
@@ -100,6 +101,113 @@ func TestPostgresPlugin(t *testing.T) {
 			input: map[string]interface{}{
 				"user_id": "nonexistent",
 				"room_id": "room1",
+			},
+			expected: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			preparedQuery, err := r.PrepareForEval(ctx)
+			require.NoError(t, err, "Failed to prepare query")
+
+			evalResult, err := preparedQuery.Eval(ctx, rego.EvalInput(tc.input))
+			require.NoError(t, err, "Failed to evaluate query")
+
+			allowed := len(evalResult) > 0 && evalResult[0].Expressions[0].Value == true
+			assert.Equal(t, tc.expected, allowed, "Unexpected authorization result")
+		})
+	}
+}
+
+func TestPostgresPlugin_WithConnectionParams(t *testing.T) {
+	ctx := context.Background()
+
+	pgContainer, pgConnStringForSeed := startPostgresContainer(t, ctx)
+	defer pgContainer.Terminate(ctx)
+
+	dbHost, err := pgContainer.Host(ctx)
+	require.NoError(t, err)
+	pgPortNat, err := pgContainer.MappedPort(ctx, nat.Port("5432/tcp"))
+	require.NoError(t, err)
+	dbPort := pgPortNat.Port()
+	dbName := "testdb"
+	dbUser := "postgres"
+	dbPassword := "postgres"
+
+	conn, err := pgx.Connect(ctx, pgConnStringForSeed)
+	require.NoError(t, err)
+	defer conn.Close(ctx)
+	seedDatabase(t, ctx, conn)
+
+	runtime.RegisterPlugin(cfg.PluginName, plugin.Factory{})
+
+	params := runtime.NewParams()
+	params.ConfigOverrides = []string{
+		// Do NOT set connection_string here
+		"plugins." + cfg.PluginName + ".connection_params.host=" + dbHost,
+		"plugins." + cfg.PluginName + ".connection_params.port=" + dbPort,
+		"plugins." + cfg.PluginName + ".connection_params.user=" + dbUser,
+		"plugins." + cfg.PluginName + ".connection_params.password=" + dbPassword,
+		"plugins." + cfg.PluginName + ".connection_params.dbname=" + dbName,
+		"plugins." + cfg.PluginName + ".connection_params.sslmode=disable",
+	}
+
+	rt, err := runtime.NewRuntime(ctx, params)
+	require.NoError(t, err)
+	defer rt.Manager.Stop(ctx)
+
+	registeredPlugins := rt.Manager.Plugins()
+	t.Logf("Registered plugins: %v", registeredPlugins)
+
+	pluginFound := false
+	for _, p := range registeredPlugins {
+		if p == cfg.PluginName {
+			pluginFound = true
+			break
+		}
+	}
+	require.True(t, pluginFound, "Plugin %s should be registered", cfg.PluginName)
+
+	status := rt.Manager.PluginStatus()
+	t.Logf("Plugin status: %+v", status)
+
+	if err := rt.Manager.Start(ctx); err != nil {
+		t.Fatalf("Failed to start plugin: %v", err)
+	}
+
+	finalStatus := rt.Manager.PluginStatus()
+	require.NotNil(t, finalStatus[cfg.PluginName], "Plugin status should not be nil")
+	require.Equal(t, plugins.StateOK, finalStatus[cfg.PluginName].State, "Plugin should be in OK state")
+
+	policyPath := filepath.Join("..", "testdata", "policies", "authz.rego")
+	policyBytes, err := os.ReadFile(policyPath)
+	require.NoError(t, err, "Failed to read policy file")
+	policyContent := string(policyBytes)
+
+	r := rego.New(
+		rego.Query("data.authz.allow"),
+		rego.Module("authz.rego", policyContent),
+	)
+
+	testCases := []struct {
+		name     string
+		input    map[string]interface{}
+		expected bool
+	}{
+		{
+			name: "User has access to room (with connection_params)",
+			input: map[string]interface{}{
+				"user_id": "user1",
+				"room_id": "room1",
+			},
+			expected: true,
+		},
+		{
+			name: "User does not have access to room (with connection_params)",
+			input: map[string]interface{}{
+				"user_id": "user2",
+				"room_id": "room3",
 			},
 			expected: false,
 		},

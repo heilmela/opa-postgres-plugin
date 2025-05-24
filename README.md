@@ -40,41 +40,33 @@ plugins:
   postgres:
     connection_string: postgres://username:password@localhost:5432/database
 ```    
-### Option 2: Using individual parameters
+#### Option 2: Using connection parameters
+
+Alternatively, you can provide all connection details as key-value pairs under a `connection_params` object. These keys directly correspond to [libpq connection parameter keywords](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-PARAMKEYWORDS).
 
 ```yaml
 plugins:
   postgres:
-    host: localhost
-    port: 5432
-    database: mydatabase
-    user: username
-    password: password
-    ssl_mode: prefer  # Options: disable, prefer, require, verify-ca, verify-full
+    connection_params:
+      # Example: Basic connection parameters
+      host: localhost
+      port: 5432                 # Default is 5432 if not specified and host is not a Unix socket path
+      dbname: mydatabase         # libpq keyword for the database name
+      user: username
+      password: password
+      sslmode: prefer            # e.g., disable, allow, prefer, require, verify-ca, verify-full
+      
+      # Example: Additional libpq parameters
+      connect_timeout: 10        # Connection timeout in seconds
+      application_name: my-opa-app # Name of the application connecting
+      search_path: "public,custom_schema" # Sets the schema search path
 ```
 
-### Additional configuration options
-```yaml
-plugins:
-  postgres:
-    # Basic connection (using either connection_string or individual parameters)
+#### Default Values
 
-    # Advanced options
-    connect_timeout: 10  # seconds
-    application_name: my-opa-app
-    search_path: public,custom_schema
-    options:
-      statement_timeout: 5000  # milliseconds
-      idle_in_transaction_session_timeout: 10000  # milliseconds
-
-# Default values:
-# - host: "localhost"
-# - port: 5432
-# - database: "postgres"
-# - ssl_mode: "prefer"
-# - connect_timeout: 10 seconds
-# - application_name: "opa-postgres-plugin"
-```
+If a `connection_string` is not provided and parameters are specified under `connection_params`:
+- Any standard PostgreSQL connection parameters not explicitly set as a key under `connection_params` will use their respective `libpq` default values (e.g., `host` might default to a local Unix socket or 'localhost', `port` to 5432, etc.). Refer to the PostgreSQL documentation for `libpq` default behaviors.
+- If neither `connection_string` nor a `connection_params` object with any entries is provided in the configuration, the plugin will fail to start.
 
 ### In Rego Policies
 
