@@ -5,7 +5,7 @@ go 1.23.8
 toolchain go1.24.1
 
 require (
-	github.com/docker/go-connections v0.5.0
+	github.com/docker/go-connections v0.6.0
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/open-policy-agent/opa v1.7.1
 	github.com/stretchr/testify v1.10.0
